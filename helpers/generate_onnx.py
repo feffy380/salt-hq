@@ -7,8 +7,8 @@ import warnings
 import os, shutil
 import argparse
 
-from segment_anything import sam_model_registry, SamPredictor
-from segment_anything.utils.onnx import SamOnnxModel
+from segment_anything_hq import sam_model_registry, SamPredictor
+from segment_anything_hq.utils.onnx import SamOnnxModel
 
 from onnxruntime.quantization import QuantType
 from onnxruntime.quantization.quantize import quantize_dynamic
@@ -19,7 +19,7 @@ import torch
 def save_onnx_model(checkpoint, model_type, onnx_model_path, orig_im_size, opset_version, quantize = True):
     sam = sam_model_registry[model_type](checkpoint=checkpoint)
 
-    onnx_model = SamOnnxModel(sam, return_single_mask=True)
+    onnx_model = SamOnnxModel(sam, multimask_output=False)  # , return_single_mask=True)
 
     dynamic_axes = {
         "point_coords": {1: "num_points"},
@@ -28,9 +28,13 @@ def save_onnx_model(checkpoint, model_type, onnx_model_path, orig_im_size, opset
 
     embed_dim = sam.prompt_encoder.embed_dim
     embed_size = sam.prompt_encoder.image_embedding_size
+    encoder_embed_dim_dict = {"vit_b":768,"vit_l":1024,"vit_h":1280}
+    encoder_embed_dim = encoder_embed_dim_dict[model_type]
+
     mask_input_size = [4 * x for x in embed_size]
     dummy_inputs = {
         "image_embeddings": torch.randn(1, embed_dim, *embed_size, dtype=torch.float),
+        "interm_embeddings": torch.randn(4, 1, *embed_size, encoder_embed_dim, dtype=torch.float),
         "point_coords": torch.randint(low=0, high=1024, size=(1, 5, 2), dtype=torch.float),
         "point_labels": torch.randint(low=0, high=4, size=(1, 5), dtype=torch.float),
         "mask_input": torch.randn(1, 1, *mask_input_size, dtype=torch.float),
@@ -73,18 +77,21 @@ def main(checkpoint_path, model_type, onnx_models_path, dataset_path, opset_vers
     if not os.path.exists(onnx_models_path):
         os.makedirs(onnx_models_path)
 
-    images_path = os.path.join(dataset_path, "images")
+    # images_path = os.path.join(dataset_path, "images")
 
-    im_sizes = set()
-    for image_path in os.listdir(images_path):
-        if image_path.endswith(".jpg") or image_path.endswith(".png"):
-            im_path = os.path.join(images_path, image_path)
-            cv2_im = cv2.imread(im_path)
-            im_sizes.add(cv2_im.shape[:2])
+    # im_sizes = set()
+    # for image_path in os.listdir(images_path):
+    #     if image_path.endswith(".jpg") or image_path.endswith(".png"):
+    #         im_path = os.path.join(images_path, image_path)
+    #         cv2_im = cv2.imread(im_path)
+    #         im_sizes.add(cv2_im.shape[:2])
 
-    for orig_im_size in im_sizes:
-        onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{orig_im_size[0]}_{orig_im_size[1]}.onnx")
-        save_onnx_model(checkpoint_path, model_type, onnx_model_path, orig_im_size, opset_version, quantize)
+    # for orig_im_size in im_sizes:
+    #     onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{orig_im_size[0]}_{orig_im_size[1]}.onnx")
+    #     save_onnx_model(checkpoint_path, model_type, onnx_model_path, orig_im_size, opset_version, quantize)
+    orig_im_size = [1500, 2250]
+    onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{orig_im_size[0]}_{orig_im_size[1]}.onnx")
+    save_onnx_model(checkpoint_path, model_type, onnx_model_path, orig_im_size, opset_version, quantize)
 
 if __name__ == "__main__":
 

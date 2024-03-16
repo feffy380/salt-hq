@@ -87,8 +87,16 @@ def parse_mask_to_coco(image_id, anno_id, image_mask, category_id, poly=False):
         )
     if poly == True:
         for contour in contours:
-            sc = simplify_coords_vwp(contour[:,0,:], 2).ravel().tolist()
-            annotation["segmentation"].append(sc)
+            sc = contour.ravel().tolist()
+            if len(sc) > 4:
+                sc = simplify_coords_vwp(contour[:,0,:], 2).ravel().tolist()
+                tol = 1e-3
+                cleaned = []
+                for x, y in zip(sc[::2], sc[1::2]):
+                    if x > tol and y > tol:
+                        cleaned.append(x)
+                        cleaned.append(y)
+                annotation["segmentation"].append(cleaned)
     return annotation
 
 
@@ -156,11 +164,17 @@ class DatasetExplorer:
             "embeddings",
             os.path.splitext(os.path.split(image_name)[1])[0] + ".npy",
         )
+        interm_path = os.path.join(
+            self.dataset_folder,
+            "embeddings",
+            os.path.splitext(os.path.split(image_name)[1])[0] + "_interm.npy",
+        )
         image = cv2.imread(image_path)
         image_bgr = copy.deepcopy(image)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         image_embedding = np.load(embedding_path)
-        return image, image_bgr, image_embedding
+        interm_embeddings = np.load(interm_path)
+        return image, image_bgr, (image_embedding, interm_embeddings)
 
     def __add_to_our_annotation_dict(self, annotation):
         image_id = annotation["image_id"]
@@ -170,7 +184,9 @@ class DatasetExplorer:
 
     def get_annotations(self, image_id, return_colors=False):
         if image_id not in self.annotations_by_image_id:
-            return [], []
+            if return_colors:
+                return [], []
+            return []
         cats = [a["category_id"] for a in self.annotations_by_image_id[image_id]]
         colors = [self.category_colors[c] for c in cats]
         if return_colors:

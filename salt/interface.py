@@ -11,7 +11,7 @@ from PyQt5.QtWidgets import (
     QListWidgetItem,
     QAbstractItemView,
 )
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QWheelEvent, QMouseEvent
+from PyQt5.QtGui import QImage, QPixmap, QPainter, QWheelEvent, QMouseEvent, QResizeEvent
 from PyQt5.QtCore import Qt, QRectF
 from PyQt5.QtWidgets import (
     QPushButton,
@@ -54,10 +54,10 @@ class CustomGraphicsView(QGraphicsView):
         pixmap = QPixmap.fromImage(q_img)
         if self.image_item:
             self.image_item.setPixmap(pixmap)
-            self.setSceneRect(QRectF(pixmap.rect()))
         else:
             self.image_item = self.scene.addPixmap(pixmap)
-            self.setSceneRect(QRectF(pixmap.rect()))
+        self.setSceneRect(QRectF(pixmap.rect()))
+        self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
 
     def wheelEvent(self, event: QWheelEvent):
         modifiers = QApplication.keyboardModifiers()
@@ -94,6 +94,8 @@ class CustomGraphicsView(QGraphicsView):
                 label = 1
             elif event.button() == Qt.RightButton:
                 label = 0
+            else:
+                return
             self.editor.add_click([int(x), int(y)], label, selected_annotations)
         self.imshow(self.editor.display)
 
@@ -130,6 +132,10 @@ class ApplicationInterface(QWidget):
 
         self.graphics_view.imshow(self.editor.display)
 
+    def resizeEvent(self, event: QResizeEvent):
+        super().resizeEvent(event)
+        self.graphics_view.fitInView(self.graphics_view.sceneRect(), Qt.KeepAspectRatio)
+
     def reset(self):
         global selected_annotations
         self.editor.reset(selected_annotations)
@@ -146,10 +152,18 @@ class ApplicationInterface(QWidget):
         self.editor.next_image()
         selected_annotations = []
         self.graphics_view.imshow(self.editor.display)
+        self.save_all()
 
     def prev_image(self):
         global selected_annotations
         self.editor.prev_image()
+        selected_annotations = []
+        self.graphics_view.imshow(self.editor.display)
+        self.save_all()
+
+    def last_annotated_image(self):
+        global selected_annotations
+        self.editor.fast_forward()
         selected_annotations = []
         self.graphics_view.imshow(self.editor.display)
 
@@ -175,10 +189,11 @@ class ApplicationInterface(QWidget):
         button_layout = QHBoxLayout(top_bar)
         self.layout.addLayout(button_layout)
         buttons = [
-            ("Add", lambda: self.add()),
+            ("Add", lambda: [self.add(), self.get_side_panel_annotations()]),
             ("Reset", lambda: self.reset()),
-            ("Prev", lambda: self.prev_image()),
-            ("Next", lambda: self.next_image()),
+            ("Prev", lambda: [self.prev_image(), self.get_side_panel_annotations()]),
+            ("Next", lambda: [self.next_image(), self.get_side_panel_annotations()]),
+            ("Last Annotated", lambda: [self.last_annotated_image(), self.get_side_panel_annotations()]),
             ("Toggle", lambda: self.toggle()),
             ("Transparency Up", lambda: self.transparency_up()),
             ("Transparency Down", lambda: self.transparency_down()),
@@ -239,12 +254,12 @@ class ApplicationInterface(QWidget):
 
     def annotation_list_item_clicked(self, item):
         global selected_annotations
+        i = int(item.text().split(" ")[0])
         if item.isSelected():
-            selected_annotations.append(int(item.text().split(" ")[0]))
-            self.editor.draw_selected_annotations(selected_annotations)
+            selected_annotations.append(i)
         else:
-            selected_annotations.remove(int(item.text().split(" ")[0]))
-            self.editor.draw_selected_annotations(selected_annotations)
+            selected_annotations.remove(i)
+        self.editor.draw_selected_annotations(selected_annotations)
         self.graphics_view.imshow(self.editor.display)
 
     def keyPressEvent(self, event):

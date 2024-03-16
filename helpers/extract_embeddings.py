@@ -8,7 +8,8 @@ import argparse
 import cv2
 from tqdm import tqdm
 import numpy as np
-from segment_anything import sam_model_registry, SamPredictor
+import torch
+from segment_anything_hq import sam_model_registry, SamPredictor
 
 def main(checkpoint_path, model_type, device, images_folder, embeddings_folder):
     sam = sam_model_registry[model_type](checkpoint=checkpoint_path)
@@ -24,9 +25,12 @@ def main(checkpoint_path, model_type, device, images_folder, embeddings_folder):
         predictor.set_image(image)
 
         image_embedding = predictor.get_image_embedding().cpu().numpy()
+        interm_embeddings = torch.stack(predictor.interm_features).cpu().numpy()
 
         out_path = os.path.join(embeddings_folder, os.path.splitext(image_name)[0] + ".npy")
+        interm_out_path = os.path.join(embeddings_folder, os.path.splitext(image_name)[0] + "_interm.npy")
         np.save(out_path, image_embedding)
+        np.save(interm_out_path, interm_embeddings)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

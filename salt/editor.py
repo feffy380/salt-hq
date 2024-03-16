@@ -79,10 +79,12 @@ class Editor:
         anns, colors = self.dataset_explorer.get_annotations(
             self.image_id, return_colors=True
         )
-        for i, (ann, color) in enumerate(zip(anns, colors)):
-            for selected_ann in selected_annotations:
-                if ann["id"] == selected_ann:
-                    colors[i] = (0, 0, 0)
+        if selected_annotations:
+            anns, colors = zip(*((ann, color) for ann, color in zip(anns, colors) if ann["id"] in selected_annotations))
+        # for i, (ann, color) in enumerate(zip(anns, colors)):
+        #     for selected_ann in selected_annotations:
+        #         if ann["id"] == selected_ann:
+        #             colors[i] = (0, 0, 0)
         # Use this to list the annotations
         self.display = self.du.draw_annotations(self.display, anns, colors)
 
@@ -95,7 +97,7 @@ class Editor:
             self.display = self.du.overlay_mask_on_image(
                 self.display, self.curr_inputs.curr_mask
             )
-        if self.show_other_anns:
+        if self.show_other_anns or selected_annotations:
             self.__draw_known_annotations(selected_annotations)
 
     def add_click(self, new_pt, new_label, selected_annotations=[]):
@@ -143,10 +145,7 @@ class Editor:
     def save(self):
         self.dataset_explorer.save_annotation()
 
-    def next_image(self):
-        if self.image_id == self.dataset_explorer.get_num_images() - 1:
-            return
-        self.image_id += 1
+    def update_image(self):
         (
             self.image,
             self.image_bgr,
@@ -156,18 +155,26 @@ class Editor:
         self.onnx_helper.set_image_resolution(self.image.shape[1], self.image.shape[0])
         self.reset()
 
+    def next_image(self):
+        if self.image_id == self.dataset_explorer.get_num_images() - 1:
+            return
+        self.image_id += 1
+        self.update_image()
+
     def prev_image(self):
         if self.image_id == 0:
             return
         self.image_id -= 1
-        (
-            self.image,
-            self.image_bgr,
-            self.image_embedding,
-        ) = self.dataset_explorer.get_image_data(self.image_id)
-        self.display = self.image_bgr.copy()
-        self.onnx_helper.set_image_resolution(self.image.shape[1], self.image.shape[0])
-        self.reset()
+        self.update_image()
+
+    def fast_forward(self):
+        i = 0
+        while i < self.dataset_explorer.get_num_images():
+            if not self.dataset_explorer.get_annotations(i):
+                self.image_id = max(i - 1, 0)
+                break
+            i += 1
+        self.update_image()
 
     def next_category(self):
         if self.category_id == len(self.categories) - 1:

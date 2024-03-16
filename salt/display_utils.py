@@ -1,11 +1,12 @@
 import cv2
 import numpy as np
+from math import isclose
 from pycocotools import mask as coco_mask
 
 
 class DisplayUtils:
     def __init__(self):
-        self.transparency = 0
+        self.transparency = 0.2
         self.box_width = 2
 
     def increase_transparency(self):
@@ -29,6 +30,20 @@ class DisplayUtils:
     def __convert_ann_to_mask(self, ann, height, width):
         mask = np.zeros((height, width), dtype=np.uint8)
         poly = ann["segmentation"]
+
+        indices_to_delete = []
+        for i in range(len(poly)):
+            p = poly[i]
+            if isclose(p[0], 0, abs_tol=0.001) and isclose(p[1], 0, abs_tol=0.001) and min(p[2::2]) != 1:
+                # The model sometimes includes (0,0) despite not being included
+                poly[i] = poly[i][2:]
+            if len(p) <= 4:
+                # Delete this 2-pixel mask, or else it will be interpreted as a bbox
+                indices_to_delete.append(i)
+
+        for i in reversed(indices_to_delete):
+            del poly[i]
+
         rles = coco_mask.frPyObjects(poly, height, width)
         rle = coco_mask.merge(rles)
         mask_instance = coco_mask.decode(rle)
@@ -50,7 +65,7 @@ class DisplayUtils:
             (x, y - 10),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.9,
-            (0, 0, 0),
+            color,  # (0, 0, 0),
             4,
         )
         return image

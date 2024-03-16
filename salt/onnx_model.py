@@ -6,7 +6,8 @@ from salt.utils import apply_coords
 
 
 def get_model_path_from_resolution(onnx_models_path, width, height):
-    onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{height}_{width}.onnx")
+    # onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{height}_{width}.onnx")
+    onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.1500_2250.onnx")
     return onnx_model_path
 
 
@@ -65,7 +66,8 @@ class OnnxModels:
         else:
             onnx_has_mask_input = np.ones(1, dtype=np.float32)
         ort_inputs = {
-            "image_embeddings": image_embedding,
+            "image_embeddings": image_embedding[0],
+            "interm_embeddings": image_embedding[1],
             "point_coords": onnx_coord,
             "point_labels": onnx_label,
             "mask_input": onnx_mask_input,
