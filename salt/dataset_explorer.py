@@ -6,8 +6,7 @@ import os
 import cv2
 import numpy as np
 from distinctipy import distinctipy
-from pycocotools import mask
-from simplification.cutil import simplify_coords_vwp
+from pycocotools import mask as mask_utils
 
 
 def init_coco(dataset_folder, image_names, categories, coco_json_path):
@@ -53,25 +52,11 @@ def unbunch_coords(coords):
     return list(itertools.chain(*coords))
 
 
-def bounding_box_from_mask(mask):
-    mask = mask.astype(np.uint8)
-    contours, hierarchy = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    all_contours = []
-    for contour in contours:
-        all_contours.extend(contour)
-    convex_hull = cv2.convexHull(np.array(all_contours))
-    x, y, w, h = cv2.boundingRect(convex_hull)
-    return x, y, w, h
-
-
-def parse_mask_to_coco(image_id, anno_id, image_mask, category_id, poly=False):
+def parse_mask_to_coco(image_id, anno_id, image_mask, category_id):
     start_anno_id = anno_id
-    x, y, width, height = bounding_box_from_mask(image_mask)
-    if poly == False:
-        fortran_binary_mask = np.asfortranarray(image_mask)
-        encoded_mask = mask.encode(fortran_binary_mask)
-    if poly == True:
-        contours, _ = cv2.findContours(image_mask.astype(np.uint8), cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    fortran_binary_mask = np.asfortranarray(image_mask)
+    encoded_mask = mask_utils.encode(fortran_binary_mask)
+    x, y, width, height = mask_utils.toBbox(encoded_mask)
     annotation = {
         "id": start_anno_id,
         "image_id": image_id,
@@ -79,25 +64,12 @@ def parse_mask_to_coco(image_id, anno_id, image_mask, category_id, poly=False):
         "bbox": [float(x), float(y), float(width), float(height)],
         "area": float(width * height),
         "iscrowd": 0,
-        "segmentation": [],
+        "segmentation": {},
     }
-    if poly == False:
-        annotation["segmentation"] = encoded_mask
-        annotation["segmentation"]["counts"] = str(
-            annotation["segmentation"]["counts"], "utf-8"
-        )
-    if poly == True:
-        for contour in contours:
-            sc = contour.ravel().tolist()
-            if len(sc) > 4:
-                sc = simplify_coords_vwp(contour[:,0,:], 2).ravel().tolist()
-                tol = 1e-3
-                cleaned = []
-                for x, y in zip(sc[::2], sc[1::2]):
-                    if x > tol and y > tol:
-                        cleaned.append(x)
-                        cleaned.append(y)
-                annotation["segmentation"].append(cleaned)
+    annotation["segmentation"] = encoded_mask
+    annotation["segmentation"]["counts"] = str(
+        annotation["segmentation"]["counts"], "utf-8"
+    )
     return annotation
 
 
@@ -206,12 +178,10 @@ class DatasetExplorer:
                 self.annotations_by_image_id[image_id].remove(annotation)
                 break
 
-    def add_annotation(self, image_id, category_id, mask, poly=True):
+    def add_annotation(self, image_id, category_id, mask):
         if mask is None:
             return
-        annotation = parse_mask_to_coco(
-            image_id, self.global_annotation_id, mask, category_id, poly=poly
-        )
+        annotation = parse_mask_to_coco(image_id, self.global_annotation_id, mask, category_id)
         self.__add_to_our_annotation_dict(annotation)
         self.coco_json["annotations"].append(annotation)
         self.global_annotation_id += 1

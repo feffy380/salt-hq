@@ -81,11 +81,9 @@ class CustomGraphicsView(QGraphicsView):
         self.set_image(q_img)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        # FUTURE USE OF RIGHT CLICK EVENT IN THIS AREA
         modifiers = QApplication.keyboardModifiers()
         if modifiers == Qt.ControlModifier:
-            print("Control/ Command key pressed during a mouse click")
-            # self.editor.remove_click([int(x), int(y)])
+            pass
         else:
             pos = event.pos()
             pos_in_item = self.mapToScene(pos) - self.image_item.pos()
@@ -296,3 +294,6 @@ class ApplicationInterface(QWidget):
             # self.clear_annotations(selected_annotations)
             # Do something if the space bar is pressed
             # pass
+
+    def closeEvent(self, event):
+        self.save_all()

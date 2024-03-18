@@ -82,15 +82,12 @@ class OnnxModels:
         image_embedding,
         input_point,
         input_label,
-        selected_box=None,
+        input_box=None,
         low_res_logits=None,
     ):
         onnx_mask_input = None
-        input_box = None
         if low_res_logits is not None:
             onnx_mask_input = low_res_logits
-        if input_box is not None:
-            input_box = selected_box
         ort_inputs = self.__translate_input(
             image,
             image_embedding,

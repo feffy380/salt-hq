@@ -1,8 +1,6 @@
-from math import isclose
-
 import cv2
 import numpy as np
-from pycocotools import mask as coco_mask
+from pycocotools import mask as mask_utils
 
 
 class DisplayUtils:
@@ -30,24 +28,10 @@ class DisplayUtils:
 
     def __convert_ann_to_mask(self, ann, height, width):
         mask = np.zeros((height, width), dtype=np.uint8)
-        poly = ann["segmentation"]
-
-        indices_to_delete = []
-        for i in range(len(poly)):
-            p = poly[i]
-            if isclose(p[0], 0, abs_tol=0.001) and isclose(p[1], 0, abs_tol=0.001) and min(p[2::2]) != 1:
-                # The model sometimes includes (0,0) despite not being included
-                poly[i] = poly[i][2:]
-            if len(p) <= 4:
-                # Delete this 2-pixel mask, or else it will be interpreted as a bbox
-                indices_to_delete.append(i)
-
-        for i in reversed(indices_to_delete):
-            del poly[i]
-
-        rles = coco_mask.frPyObjects(poly, height, width)
-        rle = coco_mask.merge(rles)
-        mask_instance = coco_mask.decode(rle)
+        # rles = mask_utils.frPyObjects(poly, height, width)
+        # rle = mask_utils.merge(rles)
+        # mask_instance = mask_utils.decode(rle)
+        mask_instance = mask_utils.decode(ann["segmentation"])
         mask_instance = np.logical_not(mask_instance)
         mask = np.logical_or(mask, mask_instance)
         mask = np.logical_not(mask)

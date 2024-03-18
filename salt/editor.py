@@ -83,10 +83,6 @@ class Editor:
         )
         if selected_annotations:
             anns, colors = zip(*((ann, color) for ann, color in zip(anns, colors) if ann["id"] in selected_annotations))
-        # for i, (ann, color) in enumerate(zip(anns, colors)):
-        #     for selected_ann in selected_annotations:
-        #         if ann["id"] == selected_ann:
-        #             colors[i] = (0, 0, 0)
         # Use this to list the annotations
         self.display = self.du.draw_annotations(self.display, anns, colors)
 
@@ -102,8 +98,7 @@ class Editor:
         if self.show_other_anns or selected_annotations:
             self.__draw_known_annotations(selected_annotations)
 
-    def add_click(self, new_pt, new_label, selected_annotations=[]):
-        self.curr_inputs.add_input_click(new_pt, new_label)
+    def update_overlay(self, selected_annotations=[]):
         masks, low_res_logits = self.onnx_helper.call(
             self.image,
             self.image_embedding,
@@ -114,6 +109,10 @@ class Editor:
         self.curr_inputs.set_mask(masks[0, 0, :, :])
         self.curr_inputs.set_low_res_logits(low_res_logits)
         self.__draw(selected_annotations)
+
+    def add_click(self, new_pt, new_label, selected_annotations=[]):
+        self.curr_inputs.add_input_click(new_pt, new_label)
+        self.update_overlay(selected_annotations)
 
     def remove_click(self, new_pt):
         print("ran remove click")

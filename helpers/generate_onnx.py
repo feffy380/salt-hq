@@ -76,18 +76,6 @@ def main(checkpoint_path, model_type, onnx_models_path, dataset_path, opset_vers
     if not os.path.exists(onnx_models_path):
         os.makedirs(onnx_models_path)
 
-    # images_path = os.path.join(dataset_path, "images")
-
-    # im_sizes = set()
-    # for image_path in os.listdir(images_path):
-    #     if image_path.endswith(".jpg") or image_path.endswith(".png"):
-    #         im_path = os.path.join(images_path, image_path)
-    #         cv2_im = cv2.imread(im_path)
-    #         im_sizes.add(cv2_im.shape[:2])
-
-    # for orig_im_size in im_sizes:
-    #     onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{orig_im_size[0]}_{orig_im_size[1]}.onnx")
-    #     save_onnx_model(checkpoint_path, model_type, onnx_model_path, orig_im_size, opset_version, quantize)
     orig_im_size = [1500, 2250]
     onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{orig_im_size[0]}_{orig_im_size[1]}.onnx")
     save_onnx_model(checkpoint_path, model_type, onnx_model_path, orig_im_size, opset_version, quantize)
