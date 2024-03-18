@@ -1,25 +1,25 @@
-import cv2
+from PyQt5.QtCore import QRectF, Qt
+from PyQt5.QtGui import (
+    QImage,
+    QMouseEvent,
+    QPainter,
+    QPixmap,
+    QResizeEvent,
+    QWheelEvent,
+)
 from PyQt5.QtWidgets import (
-    QScrollArea,
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QGraphicsView,
-    QGraphicsScene,
+    QAbstractItemView,
     QApplication,
+    QGraphicsScene,
+    QGraphicsView,
+    QHBoxLayout,
     QListWidget,
     QListWidgetItem,
-    QAbstractItemView,
-)
-from PyQt5.QtGui import QImage, QPixmap, QPainter, QWheelEvent, QMouseEvent, QResizeEvent
-from PyQt5.QtCore import Qt, QRectF
-from PyQt5.QtWidgets import (
     QPushButton,
-    QVBoxLayout,
-    QHBoxLayout,
-    QWidget,
-    QLabel,
     QRadioButton,
+    QScrollArea,
+    QVBoxLayout,
+    QWidget,
 )
 
 selected_annotations = []
@@ -193,7 +193,13 @@ class ApplicationInterface(QWidget):
             ("Reset", lambda: self.reset()),
             ("Prev", lambda: [self.prev_image(), self.get_side_panel_annotations()]),
             ("Next", lambda: [self.next_image(), self.get_side_panel_annotations()]),
-            ("Last Annotated", lambda: [self.last_annotated_image(), self.get_side_panel_annotations()]),
+            (
+                "Last Annotated",
+                lambda: [
+                    self.last_annotated_image(),
+                    self.get_side_panel_annotations(),
+                ],
+            ),
             ("Toggle", lambda: self.toggle()),
             ("Transparency Up", lambda: self.transparency_up()),
             ("Transparency Down", lambda: self.transparency_down()),
@@ -224,6 +230,7 @@ class ApplicationInterface(QWidget):
                 "background-color: rgba({},{},{},0.6)".format(*colors[i][::-1])
             )
             panel_layout.addWidget(label_array[i])
+        label_array[0].setChecked(True)
 
         scroll = QScrollArea()
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)

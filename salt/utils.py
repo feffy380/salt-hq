@@ -1,6 +1,8 @@
-import numpy as np
 from copy import deepcopy
 from typing import Tuple
+
+import numpy as np
+
 
 def get_preprocess_shape(
     oldh: int, oldw: int, long_side_length: int

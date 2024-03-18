@@ -1,12 +1,13 @@
-from pycocotools import mask
-from skimage import measure
-import json
-import shutil
+import copy
 import itertools
+import json
+import os
+
+import cv2
 import numpy as np
-from simplification.cutil import simplify_coords_vwp
-import os, cv2, copy
 from distinctipy import distinctipy
+from pycocotools import mask
+from simplification.cutil import simplify_coords_vwp
 
 
 def init_coco(dataset_folder, image_names, categories, coco_json_path):

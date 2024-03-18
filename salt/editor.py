@@ -1,8 +1,10 @@
-import os, copy
+import os
+
 import numpy as np
-from salt.onnx_model import OnnxModels
+
 from salt.dataset_explorer import DatasetExplorer
 from salt.display_utils import DisplayUtils
+from salt.onnx_model import OnnxModels
 
 
 class CurrentCapturedInputs:

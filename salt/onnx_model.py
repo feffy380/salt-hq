@@ -1,4 +1,5 @@
 import os
+
 import numpy as np
 import onnxruntime
 
@@ -16,7 +17,6 @@ class OnnxModels:
         self, onnx_models_path, threshold=0.5, image_width=1920, image_height=1080
     ):
         self.onnx_models_path = onnx_models_path
-        print(self.onnx_models_path)
         self.threshold = threshold
         self.set_image_resolution(image_width, image_height)
 

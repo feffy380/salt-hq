@@ -3,18 +3,17 @@
 # This source code is licensed under the Apache-2.0 license found in the LICENSE file in the root directory of segment_anything repository and source tree.
 # Adapted from onnx_model_example.ipynb in the segment_anything repository.
 # Please see the original notebook for more details and other examples and additional usage.
-import warnings
-import os, shutil
 import argparse
+import os
+import shutil
+import warnings
 
-from segment_anything_hq import sam_model_registry, SamPredictor
-from segment_anything_hq.utils.onnx import SamOnnxModel
-
+import torch
 from onnxruntime.quantization import QuantType
 from onnxruntime.quantization.quantize import quantize_dynamic
+from segment_anything_hq import sam_model_registry
+from segment_anything_hq.utils.onnx import SamOnnxModel
 
-import cv2
-import torch
 
 def save_onnx_model(checkpoint, model_type, onnx_model_path, orig_im_size, opset_version, quantize = True):
     sam = sam_model_registry[model_type](checkpoint=checkpoint)
