@@ -57,7 +57,6 @@ class CustomGraphicsView(QGraphicsView):
         else:
             self.image_item = self.scene.addPixmap(pixmap)
         self.setSceneRect(QRectF(pixmap.rect()))
-        self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
 
     def wheelEvent(self, event: QWheelEvent):
         modifiers = QApplication.keyboardModifiers()
@@ -72,13 +71,15 @@ class CustomGraphicsView(QGraphicsView):
             y = self.verticalScrollBar().value()
             self.verticalScrollBar().setValue(y - delta_y)
 
-    def imshow(self, img):
+    def imshow(self, img, reset_view=False):
         height, width, channel = img.shape
         bytes_per_line = 3 * width
         q_img = QImage(
             img.data, width, height, bytes_per_line, QImage.Format_RGB888
         ).rgbSwapped()
         self.set_image(q_img)
+        if reset_view:
+            self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         modifiers = QApplication.keyboardModifiers()
@@ -149,21 +150,21 @@ class ApplicationInterface(QWidget):
         global selected_annotations
         self.editor.next_image()
         selected_annotations = []
-        self.graphics_view.imshow(self.editor.display)
+        self.graphics_view.imshow(self.editor.display, reset_view=True)
         self.save_all()
 
     def prev_image(self):
         global selected_annotations
         self.editor.prev_image()
         selected_annotations = []
-        self.graphics_view.imshow(self.editor.display)
+        self.graphics_view.imshow(self.editor.display, reset_view=True)
         self.save_all()
 
     def last_annotated_image(self):
         global selected_annotations
         self.editor.fast_forward()
         selected_annotations = []
-        self.graphics_view.imshow(self.editor.display)
+        self.graphics_view.imshow(self.editor.display, reset_view=True)
 
     def toggle(self):
         global selected_annotations
@@ -185,7 +186,7 @@ class ApplicationInterface(QWidget):
     def get_top_bar(self):
         top_bar = QWidget()
         button_layout = QHBoxLayout(top_bar)
-        self.layout.addLayout(button_layout)
+        # self.layout.addLayout(button_layout)
         buttons = [
             ("Add", lambda: [self.add(), self.get_side_panel_annotations()]),
             ("Reset", lambda: self.reset()),
@@ -269,6 +270,7 @@ class ApplicationInterface(QWidget):
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Escape:
+            self.save_all()
             self.app.quit()
         if event.key() == Qt.Key_A:
             self.prev_image()

@@ -14,7 +14,7 @@ def get_model_path_from_resolution(onnx_models_path, width, height):
 
 class OnnxModels:
     def __init__(
-        self, onnx_models_path, threshold=0.5, image_width=1920, image_height=1080
+        self, onnx_models_path, threshold=0.0, image_width=1920, image_height=1080
     ):
         self.onnx_models_path = onnx_models_path
         self.threshold = threshold
