@@ -6,32 +6,16 @@ import onnxruntime
 from salt.utils import apply_coords
 
 
-def get_model_path_from_resolution(onnx_models_path, width, height):
-    # onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.{height}_{width}.onnx")
-    onnx_model_path = os.path.join(onnx_models_path, f"sam_onnx.1500_2250.onnx")
-    return onnx_model_path
-
-
 class OnnxModels:
     def __init__(
-        self, onnx_models_path, threshold=0.0, image_width=1920, image_height=1080
+        self, onnx_models_path, threshold=0.0,
     ):
         self.onnx_models_path = onnx_models_path
         self.threshold = threshold
-        self.set_image_resolution(image_width, image_height)
-
-    def __init_model(self, onnx_model_path):
+        onnx_model_path = os.path.join(self.onnx_models_path, f"sam_onnx.1500_2250.onnx")
         self.ort_session = onnxruntime.InferenceSession(
             onnx_model_path, providers=["CPUExecutionProvider"]
         )
-
-    def set_image_resolution(self, width, height):
-        self.image_width = width
-        self.image_height = height
-        onnx_model_path = get_model_path_from_resolution(
-            self.onnx_models_path, width, height
-        )
-        self.__init_model(onnx_model_path)
 
     def __translate_input(
         self,

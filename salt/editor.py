@@ -1,22 +1,22 @@
-import os
+from functools import lru_cache
+from pathlib import Path
+from threading import Thread
 
 import numpy as np
+from segment_anything_hq import SamPredictor
 
 from salt.dataset_explorer import DatasetExplorer
 from salt.display_utils import DisplayUtils
-from salt.onnx_model import OnnxModels
 
 
 class CurrentCapturedInputs:
     def __init__(self):
-        self.input_point = np.array([])
-        self.input_label = np.array([])
-        self.low_res_logits = None
-        self.curr_mask = None
+        self.reset_inputs()
 
     def reset_inputs(self):
-        self.input_point = np.array([])
-        self.input_label = np.array([])
+        self.input_points = None
+        self.input_labels = None
+        self.input_box = None
         self.low_res_logits = None
         self.curr_mask = None
 
@@ -24,11 +24,17 @@ class CurrentCapturedInputs:
         self.curr_mask = mask
 
     def add_input_click(self, input_point, input_label):
-        if len(self.input_point) == 0:
-            self.input_point = np.array([input_point])
+        if self.input_points is None:
+            self.input_points = np.array([input_point])
+            self.input_labels = np.array([input_label])
         else:
-            self.input_point = np.vstack([self.input_point, np.array([input_point])])
-        self.input_label = np.append(self.input_label, input_label)
+            self.input_points = np.vstack([self.input_points, np.array([input_point])])
+            self.input_labels = np.append(self.input_labels, input_label)
+
+    def set_input_box(self, bbox):
+        if not isinstance(bbox, np.ndarray):
+            bbox = np.array(bbox)
+        self.input_box = bbox
 
     def set_low_res_logits(self, low_res_logits):
         self.low_res_logits = low_res_logits
@@ -36,14 +42,14 @@ class CurrentCapturedInputs:
 
 class Editor:
     def __init__(
-        self, onnx_models_path, dataset_path, categories=None, coco_json_path=None
+        self, sam, dataset_path, categories=None, coco_json_path=None
     ):
-        self.dataset_path = dataset_path
-        self.coco_json_path = coco_json_path
-        if categories is None and not os.path.exists(coco_json_path):
+        self.dataset_path = Path(dataset_path)
+        if categories is None and coco_json_path is None:
             raise ValueError("categories must be provided if coco_json_path is None")
-        if self.coco_json_path is None:
-            self.coco_json_path = os.path.join(self.dataset_path, "annotations.json")
+        if coco_json_path is None:
+            coco_json_path = self.dataset_path / "annotations.json"
+        self.coco_json_path = Path(coco_json_path)
         self.dataset_explorer = DatasetExplorer(
             self.dataset_path, categories=categories, coco_json_path=self.coco_json_path
         )
@@ -54,19 +60,10 @@ class Editor:
         self.image_id = 0
         self.category_id = 0
         self.show_other_anns = True
-        (
-            self.image,
-            self.image_bgr,
-            self.image_embedding,
-        ) = self.dataset_explorer.get_image_data(self.image_id)
-        self.display = self.image_bgr.copy()
-        self.onnx_helper = OnnxModels(
-            onnx_models_path,
-            image_width=self.image.shape[1],
-            image_height=self.image.shape[0],
-        )
+        self.sam = sam
+        self.predictor = None
         self.du = DisplayUtils()
-        self.reset()
+        self.update_image()
 
     def list_annotations(self):
         anns, colors = self.dataset_explorer.get_annotations(
@@ -89,9 +86,10 @@ class Editor:
     def __draw(self, selected_annotations=[]):
         self.display = self.image_bgr.copy()
         if self.curr_inputs.curr_mask is not None:
-            self.display = self.du.draw_points(
-                self.display, self.curr_inputs.input_point, self.curr_inputs.input_label
-            )
+            if self.curr_inputs.input_points is not None:
+                self.display = self.du.draw_points(
+                    self.display, self.curr_inputs.input_points, self.curr_inputs.input_labels
+                )
             self.display = self.du.overlay_mask_on_image(
                 self.display, self.curr_inputs.curr_mask
             )
@@ -99,14 +97,14 @@ class Editor:
             self.__draw_known_annotations(selected_annotations)
 
     def update_overlay(self, selected_annotations=[]):
-        masks, low_res_logits = self.onnx_helper.call(
-            self.image,
-            self.image_embedding,
-            self.curr_inputs.input_point,
-            self.curr_inputs.input_label,
-            low_res_logits=self.curr_inputs.low_res_logits,
+        masks, _, low_res_logits = self.predictor.predict(
+            point_coords=self.curr_inputs.input_points,
+            point_labels=self.curr_inputs.input_labels,
+            box=self.curr_inputs.input_box,
+            mask_input=self.curr_inputs.low_res_logits,
+            multimask_output=False,
         )
-        self.curr_inputs.set_mask(masks[0, 0, :, :])
+        self.curr_inputs.set_mask(masks[0, :, :])
         self.curr_inputs.set_low_res_logits(low_res_logits)
         self.__draw(selected_annotations)
 
@@ -116,6 +114,10 @@ class Editor:
 
     def remove_click(self, new_pt):
         print("ran remove click")
+
+    def set_bbox(self, bbox, selected_annotations=[]):
+        self.curr_inputs.set_input_box(bbox)
+        self.update_overlay(selected_annotations)
 
     def reset(self, hard=True, selected_annotations=[]):
         self.curr_inputs.reset_inputs()
@@ -146,14 +148,26 @@ class Editor:
     def save(self):
         self.dataset_explorer.save_annotation()
 
+    # features are 84MB. don't cache too many
+    @lru_cache(maxsize=10)
+    def get_cached_image_data(self, image_id):
+        if image_id < 0 or image_id >= self.dataset_explorer.get_num_images():
+            return None, None, None
+        image, image_bgr = self.dataset_explorer.get_image_data(image_id)
+        predictor = SamPredictor(self.sam)
+        predictor.set_image(image)
+        return image, image_bgr, predictor
+
     def update_image(self):
-        (
-            self.image,
-            self.image_bgr,
-            self.image_embedding,
-        ) = self.dataset_explorer.get_image_data(self.image_id)
+        self.image, self.image_bgr, self.predictor = self.get_cached_image_data(self.image_id)
+        # prefetch 5 images centered around current
+        for i in range(self.image_id - 2, self.image_id + 3):
+            Thread(
+                target=self.get_cached_image_data,
+                args=(i,)
+            ).start()
+
         self.display = self.image_bgr.copy()
-        self.onnx_helper.set_image_resolution(self.image.shape[1], self.image.shape[0])
         self.reset()
 
     def next_image(self):

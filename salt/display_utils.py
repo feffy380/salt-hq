@@ -28,9 +28,6 @@ class DisplayUtils:
 
     def __convert_ann_to_mask(self, ann, height, width):
         mask = np.zeros((height, width), dtype=np.uint8)
-        # rles = mask_utils.frPyObjects(poly, height, width)
-        # rle = mask_utils.merge(rles)
-        # mask_instance = mask_utils.decode(rle)
         mask_instance = mask_utils.decode(ann["segmentation"])
         mask_instance = np.logical_not(mask_instance)
         mask = np.logical_or(mask, mask_instance)

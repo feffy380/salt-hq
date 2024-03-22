@@ -1,15 +1,16 @@
 import copy
 import itertools
 import json
-import os
+from pathlib import Path
 
 import cv2
 import numpy as np
 from distinctipy import distinctipy
+from PIL import Image
 from pycocotools import mask as mask_utils
 
 
-def init_coco(dataset_folder, image_names, categories, coco_json_path):
+def init_coco(dataset_folder, image_paths, categories, coco_json_path):
     coco_json = {
         "info": {
             "description": "SAM Dataset",
@@ -27,14 +28,14 @@ def init_coco(dataset_folder, image_names, categories, coco_json_path):
         coco_json["categories"].append(
             {"id": i, "name": category, "supercategory": category}
         )
-    for i, image_name in enumerate(image_names):
-        im = cv2.imread(os.path.join(dataset_folder, image_name))
+    for i, image_path in enumerate(image_paths):
+        im = Image.open(Path(dataset_folder) / image_path)
         coco_json["images"].append(
             {
                 "id": i,
-                "file_name": image_name,
-                "width": im.shape[1],
-                "height": im.shape[0],
+                "file_name": str(image_path),
+                "width": im.size[0],
+                "height": im.size[1],
             }
         )
     with open(coco_json_path, "w") as f:
@@ -75,15 +76,14 @@ def parse_mask_to_coco(image_id, anno_id, image_mask, category_id):
 
 class DatasetExplorer:
     def __init__(self, dataset_folder, categories=None, coco_json_path=None):
-        self.dataset_folder = dataset_folder
-        self.image_names = os.listdir(os.path.join(self.dataset_folder, "images"))
-        self.image_names = [
-            os.path.split(name)[1]
-            for name in self.image_names
-            if name.endswith(".jpg") or name.endswith(".png")
+        self.dataset_folder = Path(dataset_folder)
+        self.image_paths = [
+            image.relative_to(self.dataset_folder)
+            for image in (self.dataset_folder / "images").iterdir()
+            if image.suffix in (".jpg", ".png")
         ]
-        self.coco_json_path = coco_json_path
-        if not os.path.exists(coco_json_path):
+        self.coco_json_path = Path(coco_json_path)
+        if not self.coco_json_path.exists():
             self.__init_coco_json(categories)
         with open(coco_json_path, "r") as f:
             self.coco_json = json.load(f)
@@ -98,7 +98,6 @@ class DatasetExplorer:
                 self.annotations_by_image_id[image_id] = []
             self.annotations_by_image_id[image_id].append(annotation)
 
-        # self.global_annotation_id = len(self.coco_json["annotations"])
         try:
             self.global_annotation_id = (
                 max(self.coco_json["annotations"], key=lambda x: x["id"])["id"] + 1
@@ -111,11 +110,8 @@ class DatasetExplorer:
         ]
 
     def __init_coco_json(self, categories):
-        appended_image_names = [
-            os.path.join("images", name) for name in self.image_names
-        ]
         init_coco(
-            self.dataset_folder, appended_image_names, categories, self.coco_json_path
+            self.dataset_folder, self.image_paths, categories, self.coco_json_path
         )
 
     def get_colors(self, category_id):
@@ -127,27 +123,15 @@ class DatasetExplorer:
         return self.categories
 
     def get_num_images(self):
-        return len(self.image_names)
+        return len(self.image_paths)
 
     def get_image_data(self, image_id):
         image_name = self.coco_json["images"][image_id]["file_name"]
-        image_path = os.path.join(self.dataset_folder, image_name)
-        embedding_path = os.path.join(
-            self.dataset_folder,
-            "embeddings",
-            os.path.splitext(os.path.split(image_name)[1])[0] + ".npy",
-        )
-        interm_path = os.path.join(
-            self.dataset_folder,
-            "embeddings",
-            os.path.splitext(os.path.split(image_name)[1])[0] + "_interm.npy",
-        )
-        image = cv2.imread(image_path)
+        image_path = self.dataset_folder / image_name
+        image = cv2.imread(str(image_path))
         image_bgr = copy.deepcopy(image)
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image_embedding = np.load(embedding_path)
-        interm_embeddings = np.load(interm_path)
-        return image, image_bgr, (image_embedding, interm_embeddings)
+        return image, image_bgr
 
     def __add_to_our_annotation_dict(self, annotation):
         image_id = annotation["image_id"]

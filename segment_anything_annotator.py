@@ -1,6 +1,11 @@
-import os
 import argparse
 import sys
+import warnings
+from pathlib import Path
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore", category=UserWarning)
+    from segment_anything_hq import sam_model_registry
 
 from PyQt5.QtWidgets import QApplication
 
@@ -10,21 +15,25 @@ from salt.interface import ApplicationInterface
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--onnx-models-path", type=str, default="./models")
+    parser.add_argument("--checkpoint-path", type=str, default="./models/sam_hq_vit_h.pth")
+    parser.add_argument("--model-type", type=str, default="default")
+    parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--dataset-path", type=str, default="./dataset")
     parser.add_argument("--categories", type=str)
     args = parser.parse_args()
 
-    onnx_models_path = args.onnx_models_path
-    dataset_path = args.dataset_path
+    dataset_path = Path(args.dataset_path)
     categories = None
     if args.categories is not None:
         categories = args.categories.split(",")
-    
-    coco_json_path = os.path.join(dataset_path,"annotations.json")
+
+    coco_json_path = dataset_path / "annotations.json"
+
+    sam = sam_model_registry[args.model_type](checkpoint=args.checkpoint_path)
+    sam.to(device=args.device)
 
     editor = Editor(
-        onnx_models_path,
+        sam,
         dataset_path,
         categories=categories,
         coco_json_path=coco_json_path

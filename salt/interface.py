@@ -1,8 +1,9 @@
-from PyQt5.QtCore import QRectF, Qt
+from PyQt5.QtCore import QRectF, Qt, QPointF
 from PyQt5.QtGui import (
     QImage,
     QMouseEvent,
     QPainter,
+    QPen,
     QPixmap,
     QResizeEvent,
     QWheelEvent,
@@ -10,6 +11,7 @@ from PyQt5.QtGui import (
 from PyQt5.QtWidgets import (
     QAbstractItemView,
     QApplication,
+    QGraphicsRectItem,
     QGraphicsScene,
     QGraphicsView,
     QHBoxLayout,
@@ -22,11 +24,13 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from salt.editor import Editor
+
 selected_annotations = []
 
 
 class CustomGraphicsView(QGraphicsView):
-    def __init__(self, editor):
+    def __init__(self, editor: Editor):
         super(CustomGraphicsView, self).__init__()
 
         self.editor = editor
@@ -49,6 +53,9 @@ class CustomGraphicsView(QGraphicsView):
         self.setScene(self.scene)
 
         self.image_item = None
+
+        self.bbox = None
+        self.bbox_start = None
 
     def set_image(self, q_img):
         pixmap = QPixmap.fromImage(q_img)
@@ -81,26 +88,60 @@ class CustomGraphicsView(QGraphicsView):
         if reset_view:
             self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
 
+    def reset_bbox(self):
+        if self.bbox is not None:
+            self.scene.removeItem(self.bbox)
+            self.bbox = None
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
         modifiers = QApplication.keyboardModifiers()
         if modifiers == Qt.ControlModifier:
-            pass
+            self.reset_bbox()
+            self.bbox_start = event.pos()
+            self.bbox = QGraphicsRectItem()
+            self.bbox.setPen(QPen(Qt.green, 2))
+            self.bbox.setBrush(Qt.transparent)
+            self.scene.addItem(self.bbox)
         else:
-            pos = event.pos()
-            pos_in_item = self.mapToScene(pos) - self.image_item.pos()
-            x, y = pos_in_item.x(), pos_in_item.y()
+            pos = self.mapToScene(event.pos()) - self.image_item.pos()
+            x, y = int(pos.x()), int(pos.y())
             if event.button() == Qt.LeftButton:
                 label = 1
             elif event.button() == Qt.RightButton:
                 label = 0
             else:
                 return
-            self.editor.add_click([int(x), int(y)], label, selected_annotations)
+            self.editor.add_click([x, y], label, selected_annotations)
         self.imshow(self.editor.display)
+
+    def mouseMoveEvent(self, event: QMouseEvent):
+        if self.bbox_start is not None:
+            start = self.mapToScene(self.bbox_start)
+            end = self.mapToScene(event.pos())
+            r = QRectF(start, end).normalized()
+            self.bbox.setRect(r)
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event: QMouseEvent):
+        if self.bbox_start is not None:
+            start = self.bbox.rect().topLeft()
+            end = self.bbox.rect().bottomRight()
+            self.editor.set_bbox(
+                [
+                    int(start.x()),
+                    int(start.y()),
+                    int(end.x()),
+                    int(end.y()),
+                ],
+                selected_annotations
+            )
+            self.bbox_start = None
+            self.imshow(self.editor.display)
+        super().mouseReleaseEvent(event)
 
 
 class ApplicationInterface(QWidget):
-    def __init__(self, app, editor, panel_size=(1920, 1080)):
+    def __init__(self, app, editor: Editor, panel_size=(1920, 1080)):
         super(ApplicationInterface, self).__init__()
         self.app = app
         self.editor = editor
@@ -129,7 +170,7 @@ class ApplicationInterface(QWidget):
 
         self.setLayout(self.layout)
 
-        self.graphics_view.imshow(self.editor.display)
+        self.graphics_view.imshow(self.editor.display, reset_view=True)
 
     def resizeEvent(self, event: QResizeEvent):
         super().resizeEvent(event)
@@ -138,6 +179,7 @@ class ApplicationInterface(QWidget):
     def reset(self):
         global selected_annotations
         self.editor.reset(selected_annotations)
+        self.graphics_view.reset_bbox()
         self.graphics_view.imshow(self.editor.display)
 
     def add(self):
