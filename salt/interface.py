@@ -163,8 +163,10 @@ class ApplicationInterface(QWidget):
         self.panel_annotations.setSelectionMode(QAbstractItemView.MultiSelection)
         self.panel_annotations.itemClicked.connect(self.annotation_list_item_clicked)
         self.get_side_panel_annotations()
-        self.main_window.addWidget(self.panel)
-        self.main_window.addWidget(self.panel_annotations)
+        self.side_panel_layout = QVBoxLayout()
+        self.side_panel_layout.addWidget(self.panel)
+        self.side_panel_layout.addWidget(self.panel_annotations)
+        self.main_window.addLayout(self.side_panel_layout)
 
         self.layout.addLayout(self.main_window)
 
@@ -186,6 +188,7 @@ class ApplicationInterface(QWidget):
         global selected_annotations
         self.editor.save_ann()
         self.editor.reset(selected_annotations)
+        self.graphics_view.reset_bbox()
         self.graphics_view.imshow(self.editor.display)
 
     def next_image(self):
