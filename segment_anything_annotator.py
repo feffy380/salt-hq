@@ -27,7 +27,7 @@ if __name__ == "__main__":
     if args.categories is not None:
         categories = args.categories.split(",")
 
-    coco_json_path = dataset_path / "annotations.json"
+    dataset_json_path = dataset_path / "annotations.json"
 
     sam = sam_model_registry[args.model_type](checkpoint=args.checkpoint_path)
     sam.to(device=args.device)
@@ -36,7 +36,7 @@ if __name__ == "__main__":
         sam,
         dataset_path,
         categories=categories,
-        coco_json_path=coco_json_path
+        dataset_json_path=dataset_json_path
     )
 
     app = QApplication(sys.argv)

@@ -160,8 +160,8 @@ class ApplicationInterface(QWidget):
         self.panel = self.get_side_panel()
         self.panel_annotations = QListWidget()
         self.panel_annotations.setFixedWidth(200)
-        self.panel_annotations.setSelectionMode(QAbstractItemView.MultiSelection)
-        self.panel_annotations.itemClicked.connect(self.annotation_list_item_clicked)
+        self.panel_annotations.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.panel_annotations.itemSelectionChanged.connect(self.update_selected_annotations)
         self.get_side_panel_annotations()
         self.side_panel_layout = QVBoxLayout()
         self.side_panel_layout.addWidget(self.panel)
@@ -303,13 +303,12 @@ class ApplicationInterface(QWidget):
         selected_annotations = []
         self.reset()
 
-    def annotation_list_item_clicked(self, item):
+    def update_selected_annotations(self):
         global selected_annotations
-        i = int(item.text().split(" ")[0])
-        if item.isSelected():
+        selected_annotations = []
+        for item in self.panel_annotations.selectedItems():
+            i = int(item.text().split(" ")[0])
             selected_annotations.append(i)
-        else:
-            selected_annotations.remove(i)
         self.editor.draw_selected_annotations(selected_annotations)
         self.graphics_view.imshow(self.editor.display)
 
@@ -323,9 +322,9 @@ class ApplicationInterface(QWidget):
         if event.key() == Qt.Key_D:
             self.next_image()
             self.get_side_panel_annotations()
-        if event.key() == Qt.Key_K:
+        if event.key() == Qt.Key_BracketLeft:
             self.transparency_down()
-        if event.key() == Qt.Key_L:
+        if event.key() == Qt.Key_BracketRight:
             self.transparency_up()
         if event.key() == Qt.Key_N:
             self.add()

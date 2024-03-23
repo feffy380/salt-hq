@@ -10,36 +10,21 @@ from PIL import Image
 from pycocotools import mask as mask_utils
 
 
-def init_coco(dataset_folder, image_paths, categories, coco_json_path):
-    coco_json = {
-        "info": {
-            "description": "SAM Dataset",
-            "url": "",
-            "version": "1.0",
-            "year": 2023,
-            "contributor": "Sam",
-            "date_created": "2021/07/01",
-        },
+def init_dataset(dataset_folder, image_paths, categories, dataset_json_path):
+    dataset_json = {
+        "categories": categories,
         "images": [],
-        "annotations": [],
-        "categories": [],
     }
-    for i, category in enumerate(categories):
-        coco_json["categories"].append(
-            {"id": i, "name": category, "supercategory": category}
-        )
-    for i, image_path in enumerate(image_paths):
+    for image_path in image_paths:
         im = Image.open(Path(dataset_folder) / image_path)
-        coco_json["images"].append(
-            {
-                "id": i,
-                "file_name": str(image_path),
-                "width": im.size[0],
-                "height": im.size[1],
-            }
-        )
-    with open(coco_json_path, "w") as f:
-        json.dump(coco_json, f)
+        dataset_json["images"].append({
+            "file_name": str(image_path),
+            "width": im.size[0],
+            "height": im.size[1],
+            "annotations": [],
+        })
+    with open(dataset_json_path, "w") as f:
+        json.dump(dataset_json, f, indent=4)
 
 
 def bunch_coords(coords):
@@ -65,9 +50,8 @@ def parse_mask_to_coco(image_id, anno_id, image_mask, category_id):
         "bbox": [float(x), float(y), float(width), float(height)],
         "area": float(width * height),
         "iscrowd": 0,
-        "segmentation": {},
+        "segmentation": encoded_mask,
     }
-    annotation["segmentation"] = encoded_mask
     annotation["segmentation"]["counts"] = str(
         annotation["segmentation"]["counts"], "utf-8"
     )
@@ -75,43 +59,34 @@ def parse_mask_to_coco(image_id, anno_id, image_mask, category_id):
 
 
 class DatasetExplorer:
-    def __init__(self, dataset_folder, categories=None, coco_json_path=None):
+    def __init__(self, dataset_folder, categories=None, dataset_json_path=None):
         self.dataset_folder = Path(dataset_folder)
         self.image_paths = [
             image.relative_to(self.dataset_folder)
             for image in (self.dataset_folder / "images").iterdir()
             if image.suffix in (".jpg", ".png")
         ]
-        self.coco_json_path = Path(coco_json_path)
-        if not self.coco_json_path.exists():
-            self.__init_coco_json(categories)
-        with open(coco_json_path, "r") as f:
-            self.coco_json = json.load(f)
+        self.dataset_json_path = Path(dataset_json_path)
+        if not self.dataset_json_path.exists():
+            self.__init_dataset_json(categories)
+        with open(dataset_json_path, "r") as f:
+            self.dataset = json.load(f)
 
-        self.categories = [
-            category["name"] for category in self.coco_json["categories"]
-        ]
-        self.annotations_by_image_id = {}
-        for annotation in self.coco_json["annotations"]:
-            image_id = annotation["image_id"]
-            if image_id not in self.annotations_by_image_id:
-                self.annotations_by_image_id[image_id] = []
-            self.annotations_by_image_id[image_id].append(annotation)
+        self.categories = self.dataset["categories"]
+        self.global_annotation_id = 0
+        for image_info in self.dataset["images"]:
+            self.global_annotation_id += len(image_info["annotations"])
 
-        try:
-            self.global_annotation_id = (
-                max(self.coco_json["annotations"], key=lambda x: x["id"])["id"] + 1
-            )
-        except:
-            self.global_annotation_id = 0
         self.category_colors = distinctipy.get_colors(len(self.categories), rng=len(self.categories))
         self.category_colors = [
             tuple([int(255 * c) for c in color]) for color in self.category_colors
         ]
 
-    def __init_coco_json(self, categories):
-        init_coco(
-            self.dataset_folder, self.image_paths, categories, self.coco_json_path
+    def __init_dataset_json(self, categories):
+        if not categories:
+            raise ValueError("No categories provided")
+        init_dataset(
+            self.dataset_folder, self.image_paths, categories, self.dataset_json_path
         )
 
     def get_colors(self, category_id):
@@ -126,7 +101,7 @@ class DatasetExplorer:
         return len(self.image_paths)
 
     def get_image_data(self, image_id):
-        image_name = self.coco_json["images"][image_id]["file_name"]
+        image_name = self.dataset["images"][image_id]["file_name"]
         image_path = self.dataset_folder / image_name
         image = cv2.imread(str(image_path))
         image_bgr = copy.deepcopy(image)
@@ -135,41 +110,32 @@ class DatasetExplorer:
 
     def __add_to_our_annotation_dict(self, annotation):
         image_id = annotation["image_id"]
-        if image_id not in self.annotations_by_image_id:
-            self.annotations_by_image_id[image_id] = []
-        self.annotations_by_image_id[image_id].append(annotation)
+        self.dataset["images"][image_id]["annotations"].append(annotation)
 
     def get_annotations(self, image_id, return_colors=False):
-        if image_id not in self.annotations_by_image_id:
+        # if image_id not in self.annotations_by_image_id:
+        if image_id < 0 or image_id >= len(self.dataset["images"]):
             if return_colors:
                 return [], []
             return []
-        cats = [a["category_id"] for a in self.annotations_by_image_id[image_id]]
+        annotations = self.dataset["images"][image_id]["annotations"]
+        cats = [a["category_id"] for a in annotations]
         colors = [self.category_colors[c] for c in cats]
         if return_colors:
-            return self.annotations_by_image_id[image_id], colors
-        return self.annotations_by_image_id[image_id]
+            return annotations, colors
+        return annotations
 
     def delete_annotations(self, image_id, annotation_id):
-        for annotation in self.coco_json["annotations"]:
-            if (
-                annotation["image_id"] == image_id and annotation["id"] == annotation_id
-            ):  # and annotation["id"] in annotation_ids:
-                self.coco_json["annotations"].remove(annotation)
-                break
-        for annotation in self.annotations_by_image_id[image_id]:
-            if annotation["id"] == annotation_id:
-                self.annotations_by_image_id[image_id].remove(annotation)
-                break
+        self.dataset["images"][image_id]["annotations"].pop(annotation_id)
 
     def add_annotation(self, image_id, category_id, mask):
         if mask is None:
             return
         annotation = parse_mask_to_coco(image_id, self.global_annotation_id, mask, category_id)
-        self.__add_to_our_annotation_dict(annotation)
-        self.coco_json["annotations"].append(annotation)
+        # self.__add_to_our_annotation_dict(annotation)
+        self.dataset["images"][image_id]["annotations"].append(annotation)
         self.global_annotation_id += 1
 
     def save_annotation(self):
-        with open(self.coco_json_path, "w") as f:
-            json.dump(self.coco_json, f)
+        with open(self.dataset_json_path, "w") as f:
+            json.dump(self.dataset, f, indent=4)

@@ -42,16 +42,16 @@ class CurrentCapturedInputs:
 
 class Editor:
     def __init__(
-        self, sam, dataset_path, categories=None, coco_json_path=None
+        self, sam, dataset_path, categories=None, dataset_json_path=None
     ):
         self.dataset_path = Path(dataset_path)
-        if categories is None and coco_json_path is None:
-            raise ValueError("categories must be provided if coco_json_path is None")
-        if coco_json_path is None:
-            coco_json_path = self.dataset_path / "annotations.json"
-        self.coco_json_path = Path(coco_json_path)
+        if categories is None and dataset_json_path is None:
+            raise ValueError("categories must be provided if dataset_json_path is None")
+        if dataset_json_path is None:
+            dataset_json_path = self.dataset_path / "annotations.json"
+        self.dataset_json_path = Path(dataset_json_path)
         self.dataset_explorer = DatasetExplorer(
-            self.dataset_path, categories=categories, coco_json_path=self.coco_json_path
+            self.dataset_path, categories=categories, dataset_json_path=self.dataset_json_path
         )
         self.curr_inputs = CurrentCapturedInputs()
         self.categories, self.category_colors = self.dataset_explorer.get_categories(
